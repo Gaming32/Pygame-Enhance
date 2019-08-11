@@ -1,10 +1,16 @@
-""""""
+__doc__ = """Here is an example:
+    ```python
+    %s
+    ```""" % (
+    open(__file__[:-11] + '__main__.py').read().replace('\n', '\n    ')
+)
 __version__ = '0.0.1'
 
+import sys
 import pygame
 from pygame import *
 import math
-from gameobjects import *
+from gameobjects.vector2 import Vector2
 
 class ObjectDisposedError(RuntimeError): pass
 from . import time
@@ -24,7 +30,10 @@ class Game:
             tickfunc = (lambda f=self.frame_rate: timer.tick(f))
         else:
             tickfunc = (lambda: timer.tick())
+        time.framecount = 0
         scene.game = self
+        for comp in self._get_comps(scene):
+            comp.start()
         while True:
             if self._closed:
                 self._end_mainloop()
@@ -38,8 +47,12 @@ class Game:
                 comp.update()
             for comp in self._get_comps(scene):
                 comp.next_update()
+            time.framecount += 1
+            pygame.display.update()
     def _end_mainloop(self):
         time.deltatime = None
+        time.framecount = None
+        pygame.quit()
     def _get_comps(self, scene):
         for obj in scene.recur_children():
                 for component in obj.components:
@@ -102,12 +115,16 @@ class GameObject:
         else: return self.parent.get_scene()
 
 class Component:
+    def awake(self): pass
+    def start(self): pass
     def update(self): pass
     def next_update(self): pass
     def __init__(self, gobj):
+        "Use obj.add_component(Component), no need to ever call __init__ directly."
         self.source = '@%x' % id(self)
 
         self.parent = gobj
+        self.awake()
     def __repr__(self):
         return '<Component type=%s in=%r from=%r>' % (self.__class__.__qualname__, self.parent, self.source)
     @property
@@ -162,3 +179,13 @@ class Scene:
         if recursive:
             self.ROOT.dispose(recursive-1)
         del self.ROOT
+
+_globals = dir()
+_pygame = dir(sys.modules['pygame'])
+__all__ = []
+for x in _globals:
+    if x[0] != '_':
+        if x not in _pygame:
+            __all__.append(x)
+del x
+# __all__ = [x for x in _globals if not x in _pygame or x[0] != '_']
